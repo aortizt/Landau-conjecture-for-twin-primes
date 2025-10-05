@@ -1,0 +1,116 @@
+ps -p 294451 -o etime
+    ELAPSED
+19-16:24:00
+
+last_checked_index: 32507000
+>>>last_n: 12063078646<<<<
+last_twin1: 12063076787
+last_twin2: 12063076789
+
+tail twin_table_range_12000000002_13000000001.csv
+...
+32507601,12063323579,12063323581,12063323728,65015204,34797571,True
+Make sure last_n in checkpoint.txt is ≤ the last n in the CSV.
+
+
+Use:
+ twin_check_v5.cpp
+ 
+ g++ -O3 -std=c++17 -march=native -o twin_check_v4 twin_check_v5.cpp
+./twin_check_v5
+
+Restart the program
+
+Run your program normally.
+
+It will:
+
+Read checkpoint.txt.
+
+Compute START_CHUNK from resume_n.
+
+Open the last CSV in append mode.
+
+Skip all n ≤ resume_n.
+
+6) 
+Verify it resumed correctly
+
+Watch the terminal output — it should print something like:
+== Processing chunk: [12000000002, 13000000001] ==
+Checkpoint at index 32465000 (n = 12045590000)
+
+Compare the first printed n after restart with last_n in checkpoint.txt. It should be just after the last processed n.
+
+Open the CSV and check the first appended lines:
+head -n 5 twin_table_range_12000000002_13000000001.csv
+The new lines should continue directly after the previous last line.
+
+
+(1) cat checkpoint.txt
+Look at last_checked_index and last_n.
+
+This tells you where the program thinks it left off.
+
+(2)tail -n 5 twin_table_range_12000000002_13000000001.csv
+Look at the last n in the CSV.
+
+It should be ≤ last_n from checkpoint.txt`.
+
+(3)Run your program. The first lines printed should correspond to n just after last_n:
+== Processing chunk: [12000000002, 13000000001] ==
+Checkpoint at index 32464001 (n = 12045582959)
+
+The first n printed should be just larger than last_n.
+
+If so, the program resumed correctly.
+
+Optional: single-line quick diff
+
+This one-liner compares the last n in CSV vs checkpoint:
+awk -F, 'END{print "Last CSV n = "$4}' twin_table_range_12000000002_13000000001.csv
+cat checkpoint.txt | grep last_n
+
+You should see something like:
+
+Last CSV n = 12045582958
+last_n: 12045582958
+If they match, the program will continue seamlessly without overlap or missing data.
+This is the fastest way to confirm graceful resumption before letting the long run continue.
+
+
+Here’s a simple “resume pointer” diagram for your current situation, showing how the program picks up from the checkpoint and how the CSV lines align:
+CSV rows (twin_table_range_12000000002_13000000001.csv)
+---------------------------------------------------------
+...previously completed rows...
+32507598  n = 12063078000
+32507599  n = 12063078500
+32507600  n = 12063079000
+32507601  n = 12063323728   <- last line written (almost overlapping prompt)
+
+Checkpoint (checkpoint.txt)
+---------------------------------------------------------
+last_checked_index: 32464000
+last_n: 12063078646         <- last saved checkpoint (slightly behind last CSV line)
+last_twin1: ...
+last_twin2: ...
+
+Resume behavior after restart
+---------------------------------------------------------
+Program reads checkpoint:
+  resume_n = 12063078646
+
+Loop over chunk:
+  skip all n ≤ 12063078646
+  first computed n ≈ 12063078647
+  will recompute a **few rows already in CSV** (small overlap)
+  results are appended to CSV
+  checkpoint updates every 1000 rows
+
+Result:
+  CSV remains continuous
+  tiny overlap is harmless
+  no data is lost
+
+
+
